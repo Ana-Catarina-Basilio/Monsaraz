@@ -70,16 +70,6 @@
     .progress{ display:flex; align-items:center; gap:10px; }
     .bar{ flex:1; height: 10px; background: rgba(255,255,255,.18); border-radius:999px; overflow:hidden; }
     .bar > div{ height:100%; width:0%; background: rgba(255,255,255,.95); border-radius:999px; transition: width .25s ease; }
-    .teacherBadge{
-      display:inline-flex; gap:8px; align-items:center;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(255,255,255,.18);
-      border: 1px solid rgba(255,255,255,.25);
-      font-weight: 950;
-      font-size: 12px;
-    }
-
     /* Bigger markers */
     .cp{
       width: 52px; height: 52px;
@@ -214,46 +204,6 @@
     .sheet.collapsed .sheetHeader{ border-bottom: 0; padding: 10px 12px; }
     .sheet.collapsed .dragPill{ display:none; }
 
-    /* Overlay vídeo */
-    .overlay{
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,.70);
-      z-index: 5000;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      padding-top: calc(16px + var(--safe-top));
-      padding-bottom: calc(16px + var(--safe-bottom));
-    }
-    .modal{
-      width: min(820px, 96vw);
-      background: rgba(255,255,255,.96);
-      border-radius: 22px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.38);
-      overflow: hidden;
-      max-height: 92vh;
-      display:flex;
-      flex-direction: column;
-    }
-    .modalHead{
-      display:flex; align-items:center; justify-content:space-between;
-      padding: 12px 14px;
-      background: rgba(10,10,14,.92);
-      color:#fff;
-      font-weight: 950;
-    }
-    .modalBody{
-      padding: 12px 14px;
-      display: grid;
-      gap: 12px;
-      overflow:auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    video{ width:100%; border-radius: 16px; background:#111; }
-    .modalActions{ display:flex; gap:10px; flex-wrap: wrap; }
-    .btn{ border:0; border-radius: 14px; padding: 12px 14px; font-weight: 950; cursor:pointer; }
-
     @media (max-width: 480px){
       .card .sub{ display:none; }
       .leaflet-popup{ margin-bottom: 70px; }
@@ -270,7 +220,6 @@
         <div class="sub">Mobile-first • satélite sem nomes • desbloqueio por ordem</div>
       </div>
       <button id="locateBtn" class="pill secondary">📍 Eu</button>
-      <button id="teacherBtn" class="pill secondary">👩‍🏫</button>
       <button id="resetBtn" class="pill">🔄</button>
     </div>
 
@@ -278,8 +227,7 @@
       <div style="min-width:82px; font-weight:950;">Progresso</div>
       <div class="bar"><div id="barFill"></div></div>
       <div id="score" style="min-width:96px; text-align:right; font-weight:950;">0/0</div>
-      <div id="teacherStatus" style="display:none;" class="teacherBadge">👩‍🏫 modo professor</div>
-    </div>
+      </div>
   </div>
 
   <div id="sheet" class="sheet">
@@ -292,11 +240,6 @@
     </div>
     <div id="sheetBody" class="sheetBody"></div>
   </div>
-
-  <div id="overlay" class="overlay">
-    <div class="modal">
-      <div class="modalHead">
-        <div>🎶 Cante: ouvir + gravar</div>
         <button id="closeOverlay" class="btn" style="background:rgba(255,255,255,.92);">✖</button>
       </div>
       <div class="modalBody">
@@ -332,8 +275,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const STORAGE_KEY = "monsaraz_challenge_mobile_v1";
-    const TEACHER_PIN = "1234";
-
     const checkpoints = [
       {
         id: 1, emoji: "🏛️", nome: "Cuba de Monsaraz",
@@ -349,7 +290,7 @@
         id: 2, emoji: "🎶", nome: "Monumento ao Cante",
         coords: [38.44190913131398, -7.379044759989919],
         tasks: [
-          { id: "2a", tipo: "video", titulo: "🎥 Vídeo: cantar Cante",
+          { id: "2a", tipo: "lyrics", titulo: "🎥 Vídeo: cantar Cante",
             descricao: "Ouve o excerto e grava um vídeo a cantar (10–20s)." }
         ]
       },
@@ -390,16 +331,15 @@
     function loadState(){
       try{
         const raw = localStorage.getItem(STORAGE_KEY);
-        if(!raw) return { doneTasks:{}, unlockedUpTo:1, teacher:false, sheetCollapsed:false };
+        if(!raw) return { doneTasks:{}, unlockedUpTo:1, sheetCollapsed:false };
         const s = JSON.parse(raw);
         return {
           doneTasks: s.doneTasks || {},
           unlockedUpTo: Number.isFinite(s.unlockedUpTo) ? s.unlockedUpTo : 1,
-          teacher: !!s.teacher,
           sheetCollapsed: !!s.sheetCollapsed
         };
       }catch{
-        return { doneTasks:{}, unlockedUpTo:1, teacher:false, sheetCollapsed:false };
+        return { doneTasks:{}, unlockedUpTo:1, sheetCollapsed:false };
       }
     }
     function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -427,7 +367,7 @@
       renderSheet();
     }
 
-    const map = L.map("map", { zoomControl: true, tap: true }).setView([38.4436, -7.3780], 16);
+    const map = L.map("map", { zoomControl: true, tap: false }).setView([38.4436, -7.3780], 16);
 
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -436,11 +376,29 @@
 
     map.fitBounds(L.latLngBounds(checkpoints.map(c => c.coords)), { padding: [40, 40] });
 
+    // Evitar que interações no popup (scroll/pinch) mexam no mapa
+    map.on("popupopen", (e) => {
+      try { map.touchZoom.disable(); } catch {}
+      try { map.doubleClickZoom.disable(); } catch {}
+      try { map.dragging.disable(); } catch {}
+      const el = e.popup && e.popup.getElement ? e.popup.getElement() : null;
+      if (el) {
+        try { L.DomEvent.disableClickPropagation(el); } catch {}
+        try { L.DomEvent.disableScrollPropagation(el); } catch {}
+      }
+    });
+    map.on("popupclose", () => {
+      try { map.touchZoom.enable(); } catch {}
+      try { map.doubleClickZoom.enable(); } catch {}
+      try { map.dragging.enable(); } catch {}
+    });
+
+
     function iconFor(cp){
       const total = cp.tasks.length;
       const done = cp.tasks.filter(t => isTaskDone(t.id)).length;
       const doneAll = done === total;
-      const locked = (!state.teacher && cp.id > state.unlockedUpTo);
+      const locked = (cp.id > state.unlockedUpTo);
       const cls = doneAll ? "cp done" : (locked ? "cp locked" : "cp");
       return L.divIcon({
         className: "",
@@ -457,7 +415,8 @@
     checkpoints.forEach(cp => {
       const m = L.marker(cp.coords, { icon: iconFor(cp) }).addTo(map);
       m.on("click", () => openCheckpoint(cp, m));
-      m.on("mousedown", () => openCheckpoint(cp, m));
+      m.on("touchstart", () => openCheckpoint(cp, m));
+      m.on("touchend", () => openCheckpoint(cp, m));
       markerById.set(cp.id, m);
     });
 
@@ -516,8 +475,24 @@ N O P Q R S T U V W X Y Z
       `;
     }
 
-    function openCheckpoint(cp, marker){
-      const locked = (!state.teacher && cp.id > state.unlockedUpTo);
+    
+    function lyricsBlock(){
+      return `
+        <div class="task">
+          <div class="tname">🎶 Letra do cante</div>
+          <div class="hint">Cole aqui a letra que querem que os miúdos cantem. (Esta página não grava nem faz upload.)</div>
+          <div style="white-space:pre-wrap; background:rgba(0,0,0,.06); border-radius:14px; padding:12px; font-weight:900;">
+[COLOCA A LETRA AQUI]
+
+(Exemplo de uso: substituir este texto pela letra real.)
+          </div>
+          <div class="hint">Missão: lêem a letra e cantam em grupo no local 🙂</div>
+        </div>
+      `;
+    }
+
+function openCheckpoint(cp, marker){
+      const locked = (cp.id > state.unlockedUpTo);
       if(locked){
         marker.bindPopup(`
           <div class="mission">
@@ -535,13 +510,11 @@ N O P Q R S T U V W X Y Z
         if(t.tipo === "cipher") extra = cipherBlock();
         if(t.tipo === "quiz") extra = quizForcaBlock();
         if(t.tipo === "menires") extra = meniresBlock();
+        if(t.tipo === "lyrics") extra = lyricsBlock();
 
         let action = "";
-        if(t.tipo === "video"){
-          action = `
-            <button data-open-video="1">🎶 Abrir música + gravar</button>
-            <button data-task="${t.id}">${btnLabel}</button>
-          `;
+        if(t.tipo === "lyrics"){
+          action = `<button data-task="${t.id}">${btnLabel}</button>`;
         }else{
           action = `<button data-task="${t.id}">${btnLabel}</button>`;
         }
@@ -630,7 +603,7 @@ N O P Q R S T U V W X Y Z
       checkpoints.forEach(cp => {
         const total = cp.tasks.length;
         const done = cp.tasks.filter(t => isTaskDone(t.id)).length;
-        const locked = (!state.teacher && cp.id > state.unlockedUpTo);
+        const locked = (cp.id > state.unlockedUpTo);
 
         const el = document.createElement("div");
         el.className = "cpCard";
@@ -680,32 +653,14 @@ N O P Q R S T U V W X Y Z
       const allTasks = checkpoints.flatMap(c => c.tasks);
       const total = allTasks.length;
       const done = allTasks.filter(t => isTaskDone(t.id)).length;
-      document.getElementById("score").textContent = `${done}/${total} • até #${state.teacher ? "∞" : state.unlockedUpTo}`;
+      document.getElementById("score").textContent = `${done}/${total} • até #${state.unlockedUpTo}`;
       document.getElementById("barFill").style.width = total ? `${(done/total)*100}%` : "0%";
-      document.getElementById("teacherStatus").style.display = state.teacher ? "inline-flex" : "none";
     }
 
     document.getElementById("resetBtn").onclick = () => {
       state.doneTasks = {};
       state.unlockedUpTo = 1;
       saveState();
-      updateHUD();
-      refreshIcons();
-      renderSheet();
-    };
-
-    document.getElementById("teacherBtn").onclick = () => {
-      if(!state.teacher){
-        const pin = prompt("PIN do professor:");
-        if(pin !== TEACHER_PIN){ alert("PIN errado."); return; }
-        state.teacher = true;
-        saveState();
-        alert("Modo professor ON.");
-      }else{
-        state.teacher = false;
-        syncUnlock();
-        alert("Modo professor OFF.");
-      }
       updateHUD();
       refreshIcons();
       renderSheet();
@@ -729,78 +684,6 @@ N O P Q R S T U V W X Y Z
     updateHUD();
     refreshIcons();
     renderSheet();
-
-    // Video recorder
-    const overlay = document.getElementById("overlay");
-    const closeOverlay = document.getElementById("closeOverlay");
-    const preview = document.getElementById("preview");
-    const playback = document.getElementById("playback");
-    const startRec = document.getElementById("startRec");
-    const stopRec = document.getElementById("stopRec");
-    const downloadLink = document.getElementById("downloadLink");
-    const markVideoDone = document.getElementById("markVideoDone");
-
-    let stream = null;
-    let recorder = null;
-    let chunks = [];
-
-    function openVideoRecorder(){
-      overlay.style.display = "flex";
-      playback.style.display = "none";
-      downloadLink.style.display = "none";
-      downloadLink.href = "";
-      markVideoDone.disabled = true;
-      startRec.disabled = false;
-      stopRec.disabled = true;
-
-      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then(s => { stream = s; preview.srcObject = stream; })
-        .catch(err => { alert("Não consegui aceder à câmara/microfone: " + err.message); overlay.style.display = "none"; });
-    }
-
-    function closeVideoRecorder(){
-      overlay.style.display = "none";
-      try{ if(recorder && recorder.state !== "inactive") recorder.stop(); }catch{}
-      if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
-      preview.srcObject = null;
-    }
-
-    closeOverlay.onclick = closeVideoRecorder;
-    overlay.addEventListener("click", (e) => { if(e.target === overlay) closeVideoRecorder(); });
-
-    startRec.onclick = () => {
-      if(!stream) return;
-      chunks = [];
-      const opts = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
-        ? { mimeType: "video/webm;codecs=vp9,opus" }
-        : { mimeType: "video/webm" };
-      recorder = new MediaRecorder(stream, opts);
-      recorder.ondataavailable = (e) => { if(e.data.size > 0) chunks.push(e.data); };
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "video/webm" });
-        const url = URL.createObjectURL(blob);
-        playback.src = url;
-        playback.style.display = "block";
-        downloadLink.href = url;
-        downloadLink.style.display = "inline-block";
-        markVideoDone.disabled = false;
-      };
-      recorder.start();
-      startRec.disabled = true;
-      stopRec.disabled = false;
-    };
-
-    stopRec.onclick = () => {
-      if(recorder && recorder.state !== "inactive") recorder.stop();
-      stopRec.disabled = true;
-      startRec.disabled = false;
-    };
-
-    markVideoDone.onclick = () => {
-      setTaskDone("2a", true);
-      alert("✅ Missão do vídeo marcada como feita!");
-      closeVideoRecorder();
-    };
   </script>
 </body>
 </html>
