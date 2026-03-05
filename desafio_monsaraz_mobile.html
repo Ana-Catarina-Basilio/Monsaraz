@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0b12" />
+  <title>Desafio Monsaraz → Cromeleque (Mobile)</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <style>
+    :root{
+      --card: rgba(10,10,14,.72);
+      --glass: blur(10px);
+      --shadow: 0 14px 34px rgba(0,0,0,.38);
+      --radius: 18px;
+      --pad: 12px;
+      --safe-top: env(safe-area-inset-top);
+      --safe-bottom: env(safe-area-inset-bottom);
+    }
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#000; }
+    #map { height: 100%; width: 100%; }
+
+    /* Leaflet controls bigger */
+    .leaflet-control-zoom a{
+      width: 44px; height: 44px; line-height: 44px; font-size: 18px;
+    }
+
+    /* HUD */
+    .hud{
+      position:absolute; z-index:999;
+      left: var(--pad); right: var(--pad);
+      top: calc(var(--pad) + var(--safe-top));
+      display:grid; gap:10px;
+      pointer-events:none;
+    }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .card{
+      pointer-events:auto;
+      background: var(--card);
+      backdrop-filter: var(--glass);
+      color:#fff;
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      box-shadow: var(--shadow);
+      flex:1;
+      min-width: 180px;
+    }
+    .title{ font-weight: 950; font-size: 14px; letter-spacing:.2px; }
+    .sub{ opacity:.85; font-size:12px; }
+
+    .pill{
+      pointer-events:auto;
+      border:0;
+      border-radius: 999px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,.92);
+      color:#111;
+      font-weight: 950;
+      cursor:pointer;
+      box-shadow: 0 10px 24px rgba(0,0,0,.25);
+      white-space:nowrap;
+    }
+    .pill.secondary{
+      background: rgba(255,255,255,.16);
+      color:#fff;
+      border: 1px solid rgba(255,255,255,.22);
+    }
+
+    .progress{ display:flex; align-items:center; gap:10px; }
+    .bar{ flex:1; height: 10px; background: rgba(255,255,255,.18); border-radius:999px; overflow:hidden; }
+    .bar > div{ height:100%; width:0%; background: rgba(255,255,255,.95); border-radius:999px; transition: width .25s ease; }
+    .teacherBadge{
+      display:inline-flex; gap:8px; align-items:center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.18);
+      border: 1px solid rgba(255,255,255,.25);
+      font-weight: 950;
+      font-size: 12px;
+    }
+
+    /* Bigger markers */
+    .cp{
+      width: 52px; height: 52px;
+      border-radius: 18px;
+      display:grid; place-items:center;
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 12px 26px rgba(0,0,0,.34);
+      border: 2px solid rgba(0,0,0,.06);
+      position:relative;
+    }
+    .cp .emoji{ font-size: 22px; }
+    .cp .num{
+      position:absolute; bottom:-10px;
+      font-size: 12px; font-weight: 950;
+      background: rgba(10,10,14,.78); color:#fff;
+      padding: 4px 8px; border-radius:999px;
+    }
+    .cp.done{ outline: 3px solid rgba(255,255,255,.85); }
+    .cp.locked{ opacity:.45; filter: grayscale(1); }
+
+    /* Popup */
+    .mission{ min-width: min(320px, 82vw); }
+    .mission h3{ margin:0 0 6px 0; font-size:16px; }
+    .mission p{ margin:0 0 10px 0; font-size:14px; line-height:1.25; opacity:.95; }
+
+    .tasks{ display:grid; gap:10px; }
+    .task{
+      background: rgba(10,10,14,.06);
+      border: 1px solid rgba(0,0,0,.08);
+      border-radius: 16px;
+      padding: 12px;
+      display:grid;
+      gap:10px;
+    }
+    .task .tname{ font-weight: 950; font-size:14px; }
+    .task button{
+      border:0;
+      border-radius: 14px;
+      padding: 14px 14px;
+      font-weight: 950;
+      cursor:pointer;
+      background: rgba(10,10,14,.88);
+      color:#fff;
+    }
+    .task.done{ opacity:.85; }
+    .task.done button{ background: rgba(10,10,14,.55); }
+    .hint{ font-size: 12px; opacity:.85; }
+
+    .choices{ display:grid; gap:10px; }
+    .choiceBtn{
+      width:100%;
+      border:0;
+      border-radius: 14px;
+      padding: 14px 14px;
+      font-weight: 950;
+      cursor:pointer;
+      background: rgba(10,10,14,.88);
+      color:#fff;
+    }
+
+    /* Bottom sheet list */
+    .sheet{
+      position:absolute;
+      z-index: 999;
+      left: var(--pad);
+      right: var(--pad);
+      bottom: calc(var(--pad) + var(--safe-bottom));
+      pointer-events:auto;
+      background: var(--card);
+      backdrop-filter: var(--glass);
+      color:#fff;
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .sheetHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 12px 12px;
+      font-weight: 950;
+      border-bottom: 1px solid rgba(255,255,255,.12);
+      gap: 10px;
+    }
+    .sheetHeader .left{ display:flex; align-items:center; gap:10px; }
+    .dragPill{ width: 42px; height: 6px; border-radius: 999px; background: rgba(255,255,255,.25); }
+    .sheetBody{
+      max-height: 42vh;
+      overflow:auto;
+      padding: 12px 12px 14px;
+      display:grid;
+      gap:10px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .cpCard{
+      display:flex;
+      gap: 12px;
+      align-items:center;
+      padding: 12px 12px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.10);
+      cursor:pointer;
+      user-select:none;
+    }
+    .cpCard:active{ transform: scale(.99); }
+    .cpBadge{
+      width: 44px; height: 44px;
+      border-radius: 16px;
+      display:grid; place-items:center;
+      background: rgba(255,255,255,.92);
+      color:#111;
+      font-weight: 950;
+      flex: 0 0 auto;
+    }
+    .cpBadge .emoji{ font-size: 20px; }
+    .cpMeta{ display:grid; gap:2px; }
+    .cpName{ font-weight: 950; font-size: 14px; }
+    .cpSmall{ font-size: 12px; opacity: .85; }
+    .lockedTag{
+      margin-left:auto;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.18);
+      opacity: .9;
+    }
+
+    .sheet.collapsed .sheetBody{ display:none; }
+    .sheet.collapsed{ border-radius: 999px; }
+    .sheet.collapsed .sheetHeader{ border-bottom: 0; padding: 10px 12px; }
+    .sheet.collapsed .dragPill{ display:none; }
+
+    /* Overlay vídeo */
+    .overlay{
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.70);
+      z-index: 5000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      padding-top: calc(16px + var(--safe-top));
+      padding-bottom: calc(16px + var(--safe-bottom));
+    }
+    .modal{
+      width: min(820px, 96vw);
+      background: rgba(255,255,255,.96);
+      border-radius: 22px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.38);
+      overflow: hidden;
+      max-height: 92vh;
+      display:flex;
+      flex-direction: column;
+    }
+    .modalHead{
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 12px 14px;
+      background: rgba(10,10,14,.92);
+      color:#fff;
+      font-weight: 950;
+    }
+    .modalBody{
+      padding: 12px 14px;
+      display: grid;
+      gap: 12px;
+      overflow:auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    video{ width:100%; border-radius: 16px; background:#111; }
+    .modalActions{ display:flex; gap:10px; flex-wrap: wrap; }
+    .btn{ border:0; border-radius: 14px; padding: 12px 14px; font-weight: 950; cursor:pointer; }
+
+    @media (max-width: 480px){
+      .card .sub{ display:none; }
+      .leaflet-popup{ margin-bottom: 70px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="hud">
+    <div class="row">
+      <div class="card">
+        <div class="title">🛰️ Desafio Monsaraz → Cromeleque</div>
+        <div class="sub">Mobile-first • satélite sem nomes • desbloqueio por ordem</div>
+      </div>
+      <button id="locateBtn" class="pill secondary">📍 Eu</button>
+      <button id="teacherBtn" class="pill secondary">👩‍🏫</button>
+      <button id="resetBtn" class="pill">🔄</button>
+    </div>
+
+    <div class="card progress">
+      <div style="min-width:82px; font-weight:950;">Progresso</div>
+      <div class="bar"><div id="barFill"></div></div>
+      <div id="score" style="min-width:96px; text-align:right; font-weight:950;">0/0</div>
+      <div id="teacherStatus" style="display:none;" class="teacherBadge">👩‍🏫 modo professor</div>
+    </div>
+  </div>
+
+  <div id="sheet" class="sheet">
+    <div class="sheetHeader">
+      <div class="left">
+        <div class="dragPill"></div>
+        <div>🧩 Desafios</div>
+      </div>
+      <button id="toggleSheet" class="pill secondary" style="padding:10px 12px;">⬇️</button>
+    </div>
+    <div id="sheetBody" class="sheetBody"></div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="modal">
+      <div class="modalHead">
+        <div>🎶 Cante: ouvir + gravar</div>
+        <button id="closeOverlay" class="btn" style="background:rgba(255,255,255,.92);">✖</button>
+      </div>
+      <div class="modalBody">
+        <div style="font-weight:900;">Missão: ouve o excerto e grava 10–20s a cantar. (Sem upload.)</div>
+
+        <div class="task" style="margin:0;">
+          <div class="tname">🎧 Excerto</div>
+          <div class="hint">
+            Se tiveres um ficheiro, mete-o na mesma pasta com o nome <b>cante.mp3</b>.
+            Se não tiveres, o professor pode tocar o excerto noutro dispositivo.
+          </div>
+          <audio controls style="width:100%;">
+            <source src="cante.mp3" type="audio/mpeg" />
+            O teu browser não suporta áudio.
+          </audio>
+        </div>
+
+        <video id="preview" playsinline autoplay muted></video>
+        <video id="playback" controls style="display:none;"></video>
+
+        <div class="modalActions">
+          <button id="startRec" class="btn" style="background: rgba(10,10,14,.92); color:#fff;">⏺️ Começar</button>
+          <button id="stopRec" class="btn" style="background: rgba(10,10,14,.55); color:#fff;" disabled>⏹️ Parar</button>
+          <a id="downloadLink" class="btn" style="background: rgba(0,0,0,.08); text-decoration:none; color:#111; display:none;" download="cante-video.webm">⬇️ Guardar vídeo</a>
+          <button id="markVideoDone" class="btn" style="background: rgba(0,0,0,.08);" disabled>✅ Feito</button>
+        </div>
+
+        <div class="hint">Em telemóveis a câmara só funciona em <b>HTTPS</b> (GitHub Pages serve HTTPS).</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const STORAGE_KEY = "monsaraz_challenge_mobile_v1";
+    const TEACHER_PIN = "1234";
+
+    const checkpoints = [
+      {
+        id: 1, emoji: "🏛️", nome: "Cuba de Monsaraz",
+        coords: [38.443907909060904, -7.3792383821356395],
+        tasks: [
+          { id: "1a", tipo: "check", titulo: "📸 Foto: escadas do 2º andar",
+            descricao: "Tira uma foto às escadas do segundo andar (detalhe fixe vale!)." },
+          { id: "1b", tipo: "check", titulo: "🎨 Achado: sala com pintura",
+            descricao: "Encontra uma sala com pintura (paredes/tetos)." }
+        ]
+      },
+      {
+        id: 2, emoji: "🎶", nome: "Monumento ao Cante",
+        coords: [38.44190913131398, -7.379044759989919],
+        tasks: [
+          { id: "2a", tipo: "video", titulo: "🎥 Vídeo: cantar Cante",
+            descricao: "Ouve o excerto e grava um vídeo a cantar (10–20s)." }
+        ]
+      },
+      {
+        id: 3, emoji: "🔐", nome: "Ermida de São Lázaro",
+        coords: [38.44231912975036, -7.375945206613183],
+        tasks: [
+          { id: "3a", tipo: "cipher", titulo: "🧭 Geo-cache: decifra",
+            descricao: "Decifra “Ebpun” e procura a geo-cache." }
+        ]
+      },
+      {
+        id: 4, emoji: "🧠", nome: "Forca de Monsaraz",
+        coords: [38.441869015629486, -7.372629718936129],
+        tasks: [
+          { id: "4a", tipo: "quiz", titulo: "❓ Adivinha",
+            descricao: "Descobre o que era este sítio." }
+        ]
+      },
+      {
+        id: 5, emoji: "🏺", nome: "Santa Catarina",
+        coords: [38.44466942194077, -7.3716495430887425],
+        tasks: [
+          { id: "5a", tipo: "info", titulo: "👀 Sabias que…",
+            descricao: "Aqui perto existe um sítio romano: uma villa." }
+        ]
+      },
+      {
+        id: 6, emoji: "🪨", nome: "Cromeleque do Xerez",
+        coords: [38.45340078150537, -7.37100549879876],
+        tasks: [
+          { id: "6a", tipo: "menires", titulo: "🔢 Quantos menires há?",
+            descricao: "Conta e responde (aceita 50 ou 55)." }
+        ]
+      }
+    ];
+
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return { doneTasks:{}, unlockedUpTo:1, teacher:false, sheetCollapsed:false };
+        const s = JSON.parse(raw);
+        return {
+          doneTasks: s.doneTasks || {},
+          unlockedUpTo: Number.isFinite(s.unlockedUpTo) ? s.unlockedUpTo : 1,
+          teacher: !!s.teacher,
+          sheetCollapsed: !!s.sheetCollapsed
+        };
+      }catch{
+        return { doneTasks:{}, unlockedUpTo:1, teacher:false, sheetCollapsed:false };
+      }
+    }
+    function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    const state = loadState();
+
+    function isTaskDone(id){ return !!state.doneTasks[id]; }
+
+    function computeUnlockedUpTo(){
+      let unlocked = 1;
+      for(const cp of checkpoints){
+        const allDone = cp.tasks.every(t => isTaskDone(t.id));
+        if(cp.id === unlocked && allDone) unlocked = Math.min(checkpoints.length, unlocked + 1);
+      }
+      return unlocked;
+    }
+    function syncUnlock(){
+      state.unlockedUpTo = Math.max(1, Math.min(computeUnlockedUpTo(), checkpoints.length));
+      saveState();
+    }
+    function setTaskDone(id, val){
+      state.doneTasks[id] = val;
+      syncUnlock();
+      updateHUD();
+      refreshIcons();
+      renderSheet();
+    }
+
+    const map = L.map("map", { zoomControl: true, tap: true }).setView([38.4436, -7.3780], 16);
+
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19, attribution: "Tiles © Esri" }
+    ).addTo(map);
+
+    map.fitBounds(L.latLngBounds(checkpoints.map(c => c.coords)), { padding: [40, 40] });
+
+    function iconFor(cp){
+      const total = cp.tasks.length;
+      const done = cp.tasks.filter(t => isTaskDone(t.id)).length;
+      const doneAll = done === total;
+      const locked = (!state.teacher && cp.id > state.unlockedUpTo);
+      const cls = doneAll ? "cp done" : (locked ? "cp locked" : "cp");
+      return L.divIcon({
+        className: "",
+        html: `<div class="${cls}">
+                <div class="emoji">${cp.emoji}</div>
+                <div class="num">#${cp.id}</div>
+              </div>`,
+        iconSize: [52, 52],
+        iconAnchor: [26, 26]
+      });
+    }
+
+    const markerById = new Map();
+    checkpoints.forEach(cp => {
+      const m = L.marker(cp.coords, { icon: iconFor(cp) }).addTo(map);
+      m.on("click", () => openCheckpoint(cp, m));
+      m.on("mousedown", () => openCheckpoint(cp, m));
+      markerById.set(cp.id, m);
+    });
+
+    function refreshIcons(){
+      checkpoints.forEach(cp => {
+        const m = markerById.get(cp.id);
+        if(m) m.setIcon(iconFor(cp));
+      });
+    }
+
+    function cipherBlock(){
+      return `
+        <div class="task">
+          <div class="tname">ROT13</div>
+          <div class="hint">A↔N, B↔O, … M↔Z. (Professores: Ebpun = ROCHA)</div>
+          <pre style="margin:0; padding:10px; background:rgba(0,0,0,.06); border-radius:14px; overflow:auto; font-weight:900;">
+A B C D E F G H I J K L M
+N O P Q R S T U V W X Y Z
+          </pre>
+          <div style="font-weight:950;">Código: <span style="font-size:16px;">Ebpun</span></div>
+        </div>
+
+        <div class="task">
+          <div class="tname">Resposta</div>
+          <input id="cipherInput" placeholder="Escreve aqui…" style="padding:12px 12px;border-radius:14px;border:1px solid rgba(0,0,0,.15);font-weight:950;">
+          <button id="cipherBtn">✅ Validar</button>
+          <div id="cipherMsg" class="hint"></div>
+        </div>
+      `;
+    }
+
+    function quizForcaBlock(){
+      return `
+        <div class="task">
+          <div class="tname">Adivinha</div>
+          <div>“Aqui havia um lugar onde se fazia justiça… mas ninguém queria lá ir.”</div>
+          <div class="choices" style="margin-top:8px;">
+            <button class="choiceBtn" data-ans="err">🏠 Estalagem</button>
+            <button class="choiceBtn" data-ans="ok">🪢 Forca</button>
+            <button class="choiceBtn" data-ans="err">⛲ Chafariz</button>
+          </div>
+          <div id="quizMsg" class="hint" style="margin-top:8px;"></div>
+        </div>
+      `;
+    }
+
+    function meniresBlock(){
+      return `
+        <div class="task">
+          <div class="tname">Quantos menires?</div>
+          <div class="hint">O jogo aceita 50 ou 55.</div>
+          <input id="meniresInput" inputmode="numeric" placeholder="Número…" style="padding:12px 12px;border-radius:14px;border:1px solid rgba(0,0,0,.15);font-weight:950;">
+          <button id="meniresBtn">✅ Confirmar</button>
+          <div id="meniresMsg" class="hint"></div>
+        </div>
+      `;
+    }
+
+    function openCheckpoint(cp, marker){
+      const locked = (!state.teacher && cp.id > state.unlockedUpTo);
+      if(locked){
+        marker.bindPopup(`
+          <div class="mission">
+            <h3>🔒 Bloqueado</h3>
+            <p>Completa o checkpoint <b>#${state.unlockedUpTo}</b> primeiro 😉</p>
+          </div>
+        `, { maxWidth: 420, autoPanPadding: [20, 110] }).openPopup();
+        return;
+      }
+
+      const tasksHtml = cp.tasks.map(t => {
+        const done = isTaskDone(t.id);
+        const btnLabel = done ? "↩️ Desfazer" : "✅ Feito!";
+        let extra = "";
+        if(t.tipo === "cipher") extra = cipherBlock();
+        if(t.tipo === "quiz") extra = quizForcaBlock();
+        if(t.tipo === "menires") extra = meniresBlock();
+
+        let action = "";
+        if(t.tipo === "video"){
+          action = `
+            <button data-open-video="1">🎶 Abrir música + gravar</button>
+            <button data-task="${t.id}">${btnLabel}</button>
+          `;
+        }else{
+          action = `<button data-task="${t.id}">${btnLabel}</button>`;
+        }
+
+        return `
+          <div class="task ${done ? "done" : ""}">
+            <div class="tname">${t.titulo}</div>
+            <div>${t.descricao}</div>
+            ${extra}
+            ${action}
+          </div>
+        `;
+      }).join("");
+
+      marker.bindPopup(`
+        <div class="mission">
+          <h3>${cp.emoji} #${cp.id} • ${cp.nome}</h3>
+          <div class="tasks">${tasksHtml}</div>
+        </div>
+      `, { maxWidth: 460, autoPanPadding: [20, 140] }).openPopup();
+
+      setTimeout(() => {
+        document.querySelectorAll("button[data-task]").forEach(btn => {
+          btn.onclick = () => {
+            const id = btn.getAttribute("data-task");
+            setTaskDone(id, !isTaskDone(id));
+            openCheckpoint(cp, marker);
+          };
+        });
+
+        const openVideoBtn = document.querySelector('button[data-open-video="1"]');
+        if(openVideoBtn) openVideoBtn.onclick = () => openVideoRecorder();
+
+        document.querySelectorAll(".choiceBtn").forEach(b => {
+          b.onclick = () => {
+            const ok = b.getAttribute("data-ans") === "ok";
+            const msg = document.getElementById("quizMsg");
+            if(!msg) return;
+            if(ok){
+              msg.textContent = "✅ Certo! Era a forca.";
+              setTaskDone("4a", true);
+            }else{
+              msg.textContent = "❌ Quase! Tenta outra vez.";
+            }
+          };
+        });
+
+        const cipherBtn = document.getElementById("cipherBtn");
+        if(cipherBtn) cipherBtn.onclick = () => {
+          const inp = document.getElementById("cipherInput");
+          const msg = document.getElementById("cipherMsg");
+          if(!inp || !msg) return;
+          const val = (inp.value || "").trim().toUpperCase();
+          if(val === "ROCHA"){
+            msg.textContent = "✅ Top! Agora procura a geo-cache 😉";
+            setTaskDone("3a", true);
+          }else{
+            msg.textContent = "❌ Ainda não. Dica: E↔R, b↔o, p↔c, u↔h, n↔a.";
+          }
+        };
+
+        const menBtn = document.getElementById("meniresBtn");
+        if(menBtn) menBtn.onclick = () => {
+          const inp = document.getElementById("meniresInput");
+          const msg = document.getElementById("meniresMsg");
+          if(!inp || !msg) return;
+          const n = parseInt((inp.value || "").trim(), 10);
+          if(n === 50 || n === 55){
+            msg.textContent = "✅ Boa! Final completo.";
+            setTaskDone("6a", true);
+          }else if(Number.isFinite(n)){
+            msg.textContent = "🤔 Confere outra vez no local.";
+          }else{
+            msg.textContent = "Escreve um número 🙂";
+          }
+        };
+      }, 0);
+    }
+
+    const sheet = document.getElementById("sheet");
+    const sheetBody = document.getElementById("sheetBody");
+    const toggleSheet = document.getElementById("toggleSheet");
+
+    function renderSheet(){
+      sheetBody.innerHTML = "";
+      checkpoints.forEach(cp => {
+        const total = cp.tasks.length;
+        const done = cp.tasks.filter(t => isTaskDone(t.id)).length;
+        const locked = (!state.teacher && cp.id > state.unlockedUpTo);
+
+        const el = document.createElement("div");
+        el.className = "cpCard";
+        el.innerHTML = `
+          <div class="cpBadge"><div class="emoji">${cp.emoji}</div></div>
+          <div class="cpMeta">
+            <div class="cpName">#${cp.id} • ${cp.nome}</div>
+            <div class="cpSmall">${done}/${total} tarefas</div>
+          </div>
+          ${locked ? `<div class="lockedTag">🔒</div>` : ``}
+        `;
+        el.onclick = () => {
+          const m = markerById.get(cp.id);
+          if(!m) return;
+          map.setView(cp.coords, Math.max(map.getZoom(), 17), { animate: true });
+          openCheckpoint(cp, m);
+          if(window.matchMedia("(max-width: 480px)").matches){
+            collapseSheet(true);
+          }
+        };
+        sheetBody.appendChild(el);
+      });
+    }
+
+    function collapseSheet(collapsed){
+      state.sheetCollapsed = collapsed;
+      if(collapsed){
+        sheet.classList.add("collapsed");
+        toggleSheet.textContent = "⬆️";
+      }else{
+        sheet.classList.remove("collapsed");
+        toggleSheet.textContent = "⬇️";
+      }
+      saveState();
+    }
+
+    toggleSheet.onclick = () => collapseSheet(!state.sheetCollapsed);
+
+    const isSmall = window.matchMedia("(max-width: 480px)").matches;
+    if(isSmall && state.sheetCollapsed === false){
+      state.sheetCollapsed = true;
+      saveState();
+    }
+    collapseSheet(state.sheetCollapsed);
+
+    function updateHUD(){
+      const allTasks = checkpoints.flatMap(c => c.tasks);
+      const total = allTasks.length;
+      const done = allTasks.filter(t => isTaskDone(t.id)).length;
+      document.getElementById("score").textContent = `${done}/${total} • até #${state.teacher ? "∞" : state.unlockedUpTo}`;
+      document.getElementById("barFill").style.width = total ? `${(done/total)*100}%` : "0%";
+      document.getElementById("teacherStatus").style.display = state.teacher ? "inline-flex" : "none";
+    }
+
+    document.getElementById("resetBtn").onclick = () => {
+      state.doneTasks = {};
+      state.unlockedUpTo = 1;
+      saveState();
+      updateHUD();
+      refreshIcons();
+      renderSheet();
+    };
+
+    document.getElementById("teacherBtn").onclick = () => {
+      if(!state.teacher){
+        const pin = prompt("PIN do professor:");
+        if(pin !== TEACHER_PIN){ alert("PIN errado."); return; }
+        state.teacher = true;
+        saveState();
+        alert("Modo professor ON.");
+      }else{
+        state.teacher = false;
+        syncUnlock();
+        alert("Modo professor OFF.");
+      }
+      updateHUD();
+      refreshIcons();
+      renderSheet();
+    };
+
+    // Locate
+    let userMarker = null;
+    document.getElementById("locateBtn").onclick = () => {
+      map.locate({ setView: true, maxZoom: 18, enableHighAccuracy: true, timeout: 10000 });
+    };
+    map.on("locationfound", (e) => {
+      if(userMarker) map.removeLayer(userMarker);
+      userMarker = L.circleMarker(e.latlng, { radius: 8, weight: 3, opacity: 0.9, fillOpacity: 0.6 }).addTo(map);
+    });
+    map.on("locationerror", () => {
+      alert("Não consegui obter a tua localização. Verifica permissões de GPS.");
+    });
+
+    // init
+    syncUnlock();
+    updateHUD();
+    refreshIcons();
+    renderSheet();
+
+    // Video recorder
+    const overlay = document.getElementById("overlay");
+    const closeOverlay = document.getElementById("closeOverlay");
+    const preview = document.getElementById("preview");
+    const playback = document.getElementById("playback");
+    const startRec = document.getElementById("startRec");
+    const stopRec = document.getElementById("stopRec");
+    const downloadLink = document.getElementById("downloadLink");
+    const markVideoDone = document.getElementById("markVideoDone");
+
+    let stream = null;
+    let recorder = null;
+    let chunks = [];
+
+    function openVideoRecorder(){
+      overlay.style.display = "flex";
+      playback.style.display = "none";
+      downloadLink.style.display = "none";
+      downloadLink.href = "";
+      markVideoDone.disabled = true;
+      startRec.disabled = false;
+      stopRec.disabled = true;
+
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(s => { stream = s; preview.srcObject = stream; })
+        .catch(err => { alert("Não consegui aceder à câmara/microfone: " + err.message); overlay.style.display = "none"; });
+    }
+
+    function closeVideoRecorder(){
+      overlay.style.display = "none";
+      try{ if(recorder && recorder.state !== "inactive") recorder.stop(); }catch{}
+      if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+      preview.srcObject = null;
+    }
+
+    closeOverlay.onclick = closeVideoRecorder;
+    overlay.addEventListener("click", (e) => { if(e.target === overlay) closeVideoRecorder(); });
+
+    startRec.onclick = () => {
+      if(!stream) return;
+      chunks = [];
+      const opts = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+        ? { mimeType: "video/webm;codecs=vp9,opus" }
+        : { mimeType: "video/webm" };
+      recorder = new MediaRecorder(stream, opts);
+      recorder.ondataavailable = (e) => { if(e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: "video/webm" });
+        const url = URL.createObjectURL(blob);
+        playback.src = url;
+        playback.style.display = "block";
+        downloadLink.href = url;
+        downloadLink.style.display = "inline-block";
+        markVideoDone.disabled = false;
+      };
+      recorder.start();
+      startRec.disabled = true;
+      stopRec.disabled = false;
+    };
+
+    stopRec.onclick = () => {
+      if(recorder && recorder.state !== "inactive") recorder.stop();
+      stopRec.disabled = true;
+      startRec.disabled = false;
+    };
+
+    markVideoDone.onclick = () => {
+      setTaskDone("2a", true);
+      alert("✅ Missão do vídeo marcada como feita!");
+      closeVideoRecorder();
+    };
+  </script>
+</body>
+</html>
