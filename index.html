@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Desafio Monsaraz → Cromeleque</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+
+html,body{
+height:100%;
+margin:0;
+font-family:system-ui;
+}
+
+#map{
+height:100%;
+width:100%;
+}
+
+/* HUD */
+
+.hud{
+position:absolute;
+z-index:999;
+left:10px;
+right:10px;
+top:10px;
+display:grid;
+gap:10px;
+pointer-events:none;
+}
+
+.card{
+pointer-events:auto;
+background:rgba(0,0,0,.7);
+color:white;
+padding:10px;
+border-radius:12px;
+}
+
+.progress{
+display:flex;
+gap:10px;
+align-items:center;
+}
+
+.bar{
+flex:1;
+height:8px;
+background:rgba(255,255,255,.3);
+border-radius:20px;
+overflow:hidden;
+}
+
+.bar div{
+height:100%;
+background:white;
+width:0%;
+}
+
+.pill{
+border:0;
+border-radius:20px;
+padding:10px 12px;
+font-weight:700;
+cursor:pointer;
+}
+
+.sheet{
+position:absolute;
+bottom:10px;
+left:10px;
+right:10px;
+background:rgba(0,0,0,.75);
+color:white;
+border-radius:18px;
+z-index:999;
+}
+
+.sheetHeader{
+padding:10px;
+font-weight:800;
+}
+
+.sheetBody{
+padding:10px;
+display:grid;
+gap:10px;
+max-height:40vh;
+overflow:auto;
+}
+
+.cpCard{
+background:rgba(255,255,255,.15);
+padding:10px;
+border-radius:12px;
+cursor:pointer;
+display:flex;
+gap:10px;
+align-items:center;
+}
+
+.task{
+background:rgba(0,0,0,.05);
+padding:10px;
+border-radius:10px;
+margin-top:8px;
+}
+
+button{
+padding:10px;
+border-radius:10px;
+border:0;
+cursor:pointer;
+font-weight:700;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div class="hud">
+
+<div class="card">
+🛰️ Desafio Monsaraz → Cromeleque
+</div>
+
+<div class="card progress">
+
+<div style="font-weight:800;">Progresso</div>
+
+<div class="bar">
+<div id="barFill"></div>
+</div>
+
+<div id="score">0/0</div>
+
+<button id="resetBtn" class="pill">🔄</button>
+
+</div>
+
+</div>
+
+<div class="sheet">
+
+<div class="sheetHeader">
+🧩 Desafios
+</div>
+
+<div id="sheetBody" class="sheetBody"></div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+const STORAGE_KEY="monsaraz_game";
+
+const checkpoints=[
+
+{
+id:1,
+emoji:"🏛️",
+nome:"Cuba de Monsaraz",
+coords:[38.443907909060904,-7.3792383821356395],
+tasks:[
+{id:"1a",tipo:"check",titulo:"📸 Foto escadas",descricao:"Tira foto às escadas do segundo andar"},
+{id:"1b",tipo:"check",titulo:"🎨 Sala pintada",descricao:"Encontra uma sala com pintura"}
+]
+},
+
+{
+id:2,
+emoji:"🎶",
+nome:"Monumento ao Cante",
+coords:[38.44190913131398,-7.379044759989919],
+tasks:[
+{id:"2a",tipo:"lyrics",titulo:"🎤 Cantar",descricao:"Canta um excerto de cante"}
+]
+},
+
+{
+id:3,
+emoji:"🔐",
+nome:"Ermida de São Lázaro",
+coords:[38.44231912975036,-7.375945206613183],
+tasks:[
+{id:"3a",tipo:"cipher",titulo:"Decifra",descricao:"Decifra Ebpun"}
+]
+},
+
+{
+id:4,
+emoji:"🧠",
+nome:"Forca de Monsaraz",
+coords:[38.441869015629486,-7.372629718936129],
+tasks:[
+{id:"4a",tipo:"quiz",titulo:"Adivinha",descricao:"O que existia aqui?"}
+]
+},
+
+{
+id:5,
+emoji:"🏺",
+nome:"Santa Catarina",
+coords:[38.44466942194077,-7.3716495430887425],
+tasks:[
+{id:"5a",tipo:"info",titulo:"Sabias que",descricao:"Aqui havia uma villa romana"}
+]
+},
+
+{
+id:6,
+emoji:"🪨",
+nome:"Cromeleque do Xerez",
+coords:[38.45340078150537,-7.37100549879876],
+tasks:[
+{id:"6a",tipo:"menires",titulo:"Quantos menires?",descricao:"Conta os menires"}
+]
+}
+
+];
+
+function loadState(){
+
+let raw=localStorage.getItem(STORAGE_KEY);
+
+if(!raw)return{done:{}};
+
+return JSON.parse(raw);
+
+}
+
+function saveState(){
+
+localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+
+}
+
+const state=loadState();
+
+function done(id){
+
+return state.done&&state.done[id];
+
+}
+
+function setDone(id,val){
+
+if(!state.done)state.done={};
+
+state.done[id]=val;
+
+saveState();
+
+updateHUD();
+
+}
+
+const map=L.map("map").setView([38.4436,-7.378],16);
+
+L.tileLayer(
+"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+).addTo(map);
+
+checkpoints.forEach(cp=>{
+
+let m=L.marker(cp.coords).addTo(map);
+
+m.on("click",()=>openCheckpoint(cp,m));
+
+});
+
+function openCheckpoint(cp,marker){
+
+let html="";
+
+cp.tasks.forEach(t=>{
+
+let d=done(t.id);
+
+html+=`
+
+<div class="task">
+
+<div><b>${t.titulo}</b></div>
+
+<div>${t.descricao}</div>
+
+<button data-task="${t.id}">
+
+${d?"Desfazer":"Feito"}
+
+</button>
+
+</div>
+
+`;
+
+});
+
+marker.bindPopup(`
+
+<div style="min-width:260px">
+
+<h3>${cp.emoji} ${cp.nome}</h3>
+
+${html}
+
+</div>
+
+`,{
+maxWidth:300,
+autoPanPadding:[20,120]
+}).openPopup();
+
+setTimeout(()=>{
+
+document.querySelectorAll("[data-task]").forEach(btn=>{
+
+btn.onclick=()=>{
+
+let id=btn.getAttribute("data-task");
+
+setDone(id,!done(id));
+
+openCheckpoint(cp,marker);
+
+};
+
+});
+
+},0);
+
+}
+
+function updateHUD(){
+
+let tasks=checkpoints.flatMap(c=>c.tasks);
+
+let total=tasks.length;
+
+let doneN=tasks.filter(t=>done(t.id)).length;
+
+document.getElementById("score").textContent=doneN+"/"+total;
+
+document.getElementById("barFill").style.width=(doneN/total*100)+"%";
+
+}
+
+document.getElementById("resetBtn").onclick=()=>{
+
+state.done={};
+
+saveState();
+
+updateHUD();
+
+};
+
+function renderSheet(){
+
+const body=document.getElementById("sheetBody");
+
+body.innerHTML="";
+
+checkpoints.forEach(cp=>{
+
+let el=document.createElement("div");
+
+el.className="cpCard";
+
+el.innerHTML=cp.emoji+" "+cp.nome;
+
+el.onclick=()=>{
+
+map.panTo(cp.coords);
+
+};
+
+body.appendChild(el);
+
+});
+
+}
+
+updateHUD();
+
+renderSheet();
+
+</script>
+
+</body>
+</html>
