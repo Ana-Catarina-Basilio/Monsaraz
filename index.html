@@ -70,15 +70,6 @@
     .progress{ display:flex; align-items:center; gap:10px; }
     .bar{ flex:1; height: 10px; background: rgba(255,255,255,.18); border-radius:999px; overflow:hidden; }
     .bar > div{ height:100%; width:0%; background: rgba(255,255,255,.95); border-radius:999px; transition: width .25s ease; }
-    .teacherBadge{
-      display:inline-flex; gap:8px; align-items:center;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(255,255,255,.18);
-      border: 1px solid rgba(255,255,255,.25);
-      font-weight: 950;
-      font-size: 12px;
-    }
 
     /* Bigger markers */
     .cp{
@@ -270,7 +261,6 @@
         <div class="sub">Mobile-first • satélite sem nomes • desbloqueio por ordem</div>
       </div>
       <button id="locateBtn" class="pill secondary">📍 Eu</button>
-      <button id="teacherBtn" class="pill secondary">👩‍🏫</button>
       <button id="resetBtn" class="pill">🔄</button>
     </div>
 
@@ -278,7 +268,6 @@
       <div style="min-width:82px; font-weight:950;">Progresso</div>
       <div class="bar"><div id="barFill"></div></div>
       <div id="score" style="min-width:96px; text-align:right; font-weight:950;">0/0</div>
-      <div id="teacherStatus" style="display:none;" class="teacherBadge">👩‍🏫 modo professor</div>
     </div>
   </div>
 
@@ -332,7 +321,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const STORAGE_KEY = "monsaraz_challenge_mobile_v1";
-    const TEACHER_PIN = "1234";
 
     const checkpoints = [
       {
@@ -390,16 +378,15 @@
     function loadState(){
       try{
         const raw = localStorage.getItem(STORAGE_KEY);
-        if(!raw) return { doneTasks:{}, unlockedUpTo:1, teacher:false, sheetCollapsed:false };
+        if(!raw) return { doneTasks:{}, unlockedUpTo:1, sheetCollapsed:false };
         const s = JSON.parse(raw);
         return {
           doneTasks: s.doneTasks || {},
           unlockedUpTo: Number.isFinite(s.unlockedUpTo) ? s.unlockedUpTo : 1,
-          teacher: !!s.teacher,
           sheetCollapsed: !!s.sheetCollapsed
         };
       }catch{
-        return { doneTasks:{}, unlockedUpTo:1, teacher:false, sheetCollapsed:false };
+        return { doneTasks:{}, unlockedUpTo:1, sheetCollapsed:false };
       }
     }
     function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -440,7 +427,7 @@
       const total = cp.tasks.length;
       const done = cp.tasks.filter(t => isTaskDone(t.id)).length;
       const doneAll = done === total;
-      const locked = (!state.teacher && cp.id > state.unlockedUpTo);
+      const locked = cp.id > state.unlockedUpTo;
       const cls = doneAll ? "cp done" : (locked ? "cp locked" : "cp");
       return L.divIcon({
         className: "",
@@ -517,7 +504,7 @@ N O P Q R S T U V W X Y Z
     }
 
     function openCheckpoint(cp, marker){
-      const locked = (!state.teacher && cp.id > state.unlockedUpTo);
+      const locked = cp.id > state.unlockedUpTo;
       if(locked){
         marker.bindPopup(`
           <div class="mission">
@@ -532,6 +519,7 @@ N O P Q R S T U V W X Y Z
         const done = isTaskDone(t.id);
         const btnLabel = done ? "↩️ Desfazer" : "✅ Feito!";
         let extra = "";
+
         if(t.tipo === "cipher") extra = cipherBlock();
         if(t.tipo === "quiz") extra = quizForcaBlock();
         if(t.tipo === "menires") extra = meniresBlock();
@@ -630,7 +618,7 @@ N O P Q R S T U V W X Y Z
       checkpoints.forEach(cp => {
         const total = cp.tasks.length;
         const done = cp.tasks.filter(t => isTaskDone(t.id)).length;
-        const locked = (!state.teacher && cp.id > state.unlockedUpTo);
+        const locked = cp.id > state.unlockedUpTo;
 
         const el = document.createElement("div");
         el.className = "cpCard";
@@ -680,32 +668,14 @@ N O P Q R S T U V W X Y Z
       const allTasks = checkpoints.flatMap(c => c.tasks);
       const total = allTasks.length;
       const done = allTasks.filter(t => isTaskDone(t.id)).length;
-      document.getElementById("score").textContent = `${done}/${total} • até #${state.teacher ? "∞" : state.unlockedUpTo}`;
+      document.getElementById("score").textContent = `${done}/${total} • até #${state.unlockedUpTo}`;
       document.getElementById("barFill").style.width = total ? `${(done/total)*100}%` : "0%";
-      document.getElementById("teacherStatus").style.display = state.teacher ? "inline-flex" : "none";
     }
 
     document.getElementById("resetBtn").onclick = () => {
       state.doneTasks = {};
       state.unlockedUpTo = 1;
       saveState();
-      updateHUD();
-      refreshIcons();
-      renderSheet();
-    };
-
-    document.getElementById("teacherBtn").onclick = () => {
-      if(!state.teacher){
-        const pin = prompt("PIN do professor:");
-        if(pin !== TEACHER_PIN){ alert("PIN errado."); return; }
-        state.teacher = true;
-        saveState();
-        alert("Modo professor ON.");
-      }else{
-        state.teacher = false;
-        syncUnlock();
-        alert("Modo professor OFF.");
-      }
       updateHUD();
       refreshIcons();
       renderSheet();
