@@ -2,7 +2,8 @@
 <html lang="pt">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+
 <title>Desafio Monsaraz → Cromeleque</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -24,21 +25,21 @@ width:100%;
 
 .hud{
 position:absolute;
-z-index:999;
+top:10px;
 left:10px;
 right:10px;
-top:10px;
+z-index:999;
 display:grid;
 gap:10px;
 pointer-events:none;
 }
 
 .card{
-pointer-events:auto;
-background:rgba(0,0,0,.7);
+background:rgba(0,0,0,.75);
 color:white;
 padding:10px;
 border-radius:12px;
+pointer-events:auto;
 }
 
 .progress{
@@ -61,13 +62,25 @@ background:white;
 width:0%;
 }
 
-.pill{
-border:0;
-border-radius:20px;
-padding:10px 12px;
-font-weight:700;
-cursor:pointer;
+/* compass */
+
+#compass{
+position:absolute;
+bottom:90px;
+right:15px;
+z-index:999;
+font-size:40px;
+background:rgba(0,0,0,.7);
+color:white;
+width:60px;
+height:60px;
+border-radius:50%;
+display:flex;
+align-items:center;
+justify-content:center;
 }
+
+/* sheet */
 
 .sheet{
 position:absolute;
@@ -97,10 +110,9 @@ overflow:auto;
 background:rgba(255,255,255,.15);
 padding:10px;
 border-radius:12px;
-cursor:pointer;
 display:flex;
-gap:10px;
-align-items:center;
+justify-content:space-between;
+cursor:pointer;
 }
 
 .task{
@@ -118,12 +130,60 @@ cursor:pointer;
 font-weight:700;
 }
 
+/* popup */
+
+.popupContent{
+max-height:140px;
+overflow:hidden;
+transition:max-height .3s;
+}
+
+.popupContent.expanded{
+max-height:600px;
+}
+
+.expandBtn{
+margin-top:10px;
+width:100%;
+background:#111;
+color:white;
+}
+
+/* final screen */
+
+#finalScreen{
+position:fixed;
+top:0;
+left:0;
+right:0;
+bottom:0;
+background:black;
+color:white;
+display:none;
+align-items:center;
+justify-content:center;
+text-align:center;
+font-size:28px;
+z-index:2000;
+padding:40px;
+}
+
 </style>
 </head>
 
 <body>
 
 <div id="map"></div>
+
+<div id="compass">🧭</div>
+
+<div id="finalScreen">
+<div>
+🎉 Parabéns!<br><br>
+Chegaram ao <b>Cromeleque do Xerez</b>.<br><br>
+Missão completa!
+</div>
+</div>
 
 <div class="hud">
 
@@ -133,7 +193,7 @@ font-weight:700;
 
 <div class="card progress">
 
-<div style="font-weight:800;">Progresso</div>
+<div>Progresso</div>
 
 <div class="bar">
 <div id="barFill"></div>
@@ -141,7 +201,7 @@ font-weight:700;
 
 <div id="score">0/0</div>
 
-<button id="resetBtn" class="pill">🔄</button>
+<button id="resetBtn">🔄</button>
 
 </div>
 
@@ -161,7 +221,12 @@ font-weight:700;
 
 <script>
 
+/* CONFIG */
+
+const AUTO_DISTANCE=30;
 const STORAGE_KEY="monsaraz_game";
+
+/* CHECKPOINTS */
 
 const checkpoints=[
 
@@ -169,10 +234,10 @@ const checkpoints=[
 id:1,
 emoji:"🏛️",
 nome:"Cuba de Monsaraz",
-coords:[38.443907909060904,-7.3792383821356395],
+coords:[38.4439079,-7.3792383],
 tasks:[
-{id:"1a",tipo:"check",titulo:"📸 Foto escadas",descricao:"Tira foto às escadas do segundo andar"},
-{id:"1b",tipo:"check",titulo:"🎨 Sala pintada",descricao:"Encontra uma sala com pintura"}
+{id:"1a",titulo:"📸 Foto escadas",descricao:"Tira foto às escadas"},
+{id:"1b",titulo:"🎨 Sala pintada",descricao:"Encontra sala pintada"}
 ]
 },
 
@@ -180,9 +245,9 @@ tasks:[
 id:2,
 emoji:"🎶",
 nome:"Monumento ao Cante",
-coords:[38.44190913131398,-7.379044759989919],
+coords:[38.4419091,-7.3790447],
 tasks:[
-{id:"2a",tipo:"lyrics",titulo:"🎤 Cantar",descricao:"Canta um excerto de cante"}
+{id:"2a",titulo:"🎤 Cantar",descricao:"Canta um excerto"}
 ]
 },
 
@@ -190,9 +255,9 @@ tasks:[
 id:3,
 emoji:"🔐",
 nome:"Ermida de São Lázaro",
-coords:[38.44231912975036,-7.375945206613183],
+coords:[38.4423191,-7.3759452],
 tasks:[
-{id:"3a",tipo:"cipher",titulo:"Decifra",descricao:"Decifra Ebpun"}
+{id:"3a",titulo:"Decifra",descricao:"Decifra Ebpun"}
 ]
 },
 
@@ -200,9 +265,9 @@ tasks:[
 id:4,
 emoji:"🧠",
 nome:"Forca de Monsaraz",
-coords:[38.441869015629486,-7.372629718936129],
+coords:[38.4418690,-7.3726297],
 tasks:[
-{id:"4a",tipo:"quiz",titulo:"Adivinha",descricao:"O que existia aqui?"}
+{id:"4a",titulo:"Adivinha",descricao:"O que existia aqui?"}
 ]
 },
 
@@ -210,9 +275,9 @@ tasks:[
 id:5,
 emoji:"🏺",
 nome:"Santa Catarina",
-coords:[38.44466942194077,-7.3716495430887425],
+coords:[38.4446694,-7.3716495],
 tasks:[
-{id:"5a",tipo:"info",titulo:"Sabias que",descricao:"Aqui havia uma villa romana"}
+{id:"5a",titulo:"Sabias que",descricao:"Aqui havia villa romana"}
 ]
 },
 
@@ -220,36 +285,30 @@ tasks:[
 id:6,
 emoji:"🪨",
 nome:"Cromeleque do Xerez",
-coords:[38.45340078150537,-7.37100549879876],
+coords:[38.4534007,-7.3710054],
 tasks:[
-{id:"6a",tipo:"menires",titulo:"Quantos menires?",descricao:"Conta os menires"}
+{id:"6a",titulo:"Conta menires",descricao:"Quantos menires?"}
 ]
 }
 
 ];
 
+/* STATE */
+
 function loadState(){
-
 let raw=localStorage.getItem(STORAGE_KEY);
-
-if(!raw)return{done:{}};
-
+if(!raw)return{done:{},unlocked:1};
 return JSON.parse(raw);
-
-}
-
-function saveState(){
-
-localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
-
 }
 
 const state=loadState();
 
+function saveState(){
+localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+}
+
 function done(id){
-
-return state.done&&state.done[id];
-
+return state.done && state.done[id];
 }
 
 function setDone(id,val){
@@ -258,11 +317,35 @@ if(!state.done)state.done={};
 
 state.done[id]=val;
 
+checkUnlock();
+
 saveState();
 
 updateHUD();
 
+renderSheet();
+
 }
+
+/* UNLOCK */
+
+function checkUnlock(){
+
+checkpoints.forEach(cp=>{
+
+let allDone=cp.tasks.every(t=>done(t.id));
+
+if(allDone && cp.id===state.unlocked){
+
+state.unlocked++;
+
+}
+
+});
+
+}
+
+/* MAP */
 
 const map=L.map("map").setView([38.4436,-7.378],16);
 
@@ -270,23 +353,38 @@ L.tileLayer(
 "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 ).addTo(map);
 
+/* markers */
+
+const markers={};
+
 checkpoints.forEach(cp=>{
 
 let m=L.marker(cp.coords).addTo(map);
+
+markers[cp.id]=m;
 
 m.on("click",()=>openCheckpoint(cp,m));
 
 });
 
+/* POPUP */
+
 function openCheckpoint(cp,marker){
 
-let html="";
+if(cp.id>state.unlocked){
+
+marker.bindPopup("🔒 Completa o desafio anterior").openPopup();
+return;
+
+}
+
+let tasksHTML="";
 
 cp.tasks.forEach(t=>{
 
 let d=done(t.id);
 
-html+=`
+tasksHTML+=`
 
 <div class="task">
 
@@ -295,9 +393,7 @@ html+=`
 <div>${t.descricao}</div>
 
 <button data-task="${t.id}">
-
 ${d?"Desfazer":"Feito"}
-
 </button>
 
 </div>
@@ -308,18 +404,21 @@ ${d?"Desfazer":"Feito"}
 
 marker.bindPopup(`
 
-<div style="min-width:260px">
+<div>
 
 <h3>${cp.emoji} ${cp.nome}</h3>
 
-${html}
+<div id="popupTasks" class="popupContent">
+${tasksHTML}
+</div>
+
+<button id="expandPopup" class="expandBtn">
+⬇ Expandir
+</button>
 
 </div>
 
-`,{
-maxWidth:300,
-autoPanPadding:[20,120]
-}).openPopup();
+`,{maxWidth:300}).openPopup();
 
 setTimeout(()=>{
 
@@ -327,7 +426,7 @@ document.querySelectorAll("[data-task]").forEach(btn=>{
 
 btn.onclick=()=>{
 
-let id=btn.getAttribute("data-task");
+let id=btn.dataset.task;
 
 setDone(id,!done(id));
 
@@ -337,9 +436,113 @@ openCheckpoint(cp,marker);
 
 });
 
+let expand=document.getElementById("expandPopup");
+let content=document.getElementById("popupTasks");
+
+expand.onclick=()=>{
+
+content.classList.toggle("expanded");
+
+expand.textContent=
+content.classList.contains("expanded")
+?"⬆ Reduzir"
+:"⬇ Expandir";
+
+};
+
 },0);
 
 }
+
+/* GPS */
+
+let userMarker=null;
+
+function startGPS(){
+
+navigator.geolocation.watchPosition(pos=>{
+
+let lat=pos.coords.latitude;
+let lng=pos.coords.longitude;
+
+let latlng=[lat,lng];
+
+if(!userMarker){
+
+userMarker=L.circleMarker(latlng,{
+radius:8,
+color:"#00aaff",
+fillColor:"#00aaff",
+fillOpacity:.9
+}).addTo(map);
+
+}else{
+
+userMarker.setLatLng(latlng);
+
+}
+
+checkpoints.forEach(cp=>{
+
+if(cp.id>state.unlocked)return;
+
+let dist=map.distance(latlng,cp.coords);
+
+if(dist<AUTO_DISTANCE){
+
+openCheckpoint(cp,markers[cp.id]);
+
+}
+
+});
+
+updateCompass(latlng);
+
+checkFinal(latlng);
+
+},
+()=>alert("GPS não disponível"),
+{enableHighAccuracy:true});
+
+}
+
+/* COMPASS */
+
+function updateCompass(pos){
+
+let next=checkpoints.find(c=>c.id===state.unlocked);
+
+if(!next)return;
+
+let angle=Math.atan2(
+next.coords[1]-pos[1],
+next.coords[0]-pos[0]
+);
+
+angle=angle*180/Math.PI;
+
+document.getElementById("compass")
+.style.transform=`rotate(${angle}deg)`;
+
+}
+
+/* FINAL SCREEN */
+
+function checkFinal(pos){
+
+let last=checkpoints[checkpoints.length-1];
+
+let dist=map.distance(pos,last.coords);
+
+if(dist<30 && state.unlocked>checkpoints.length){
+
+document.getElementById("finalScreen").style.display="flex";
+
+}
+
+}
+
+/* HUD */
 
 function updateHUD(){
 
@@ -355,31 +558,45 @@ document.getElementById("barFill").style.width=(doneN/total*100)+"%";
 
 }
 
+/* RESET */
+
 document.getElementById("resetBtn").onclick=()=>{
 
 state.done={};
+state.unlocked=1;
 
 saveState();
 
 updateHUD();
 
+renderSheet();
+
 };
+
+/* SHEET */
 
 function renderSheet(){
 
-const body=document.getElementById("sheetBody");
+let body=document.getElementById("sheetBody");
 
 body.innerHTML="";
 
 checkpoints.forEach(cp=>{
 
+let locked=cp.id>state.unlocked;
+
 let el=document.createElement("div");
 
 el.className="cpCard";
 
-el.innerHTML=cp.emoji+" "+cp.nome;
+el.innerHTML=`
+<div>${cp.emoji} ${cp.nome}</div>
+<div>${locked?"🔒":""}</div>
+`;
 
 el.onclick=()=>{
+
+if(locked)return;
 
 map.panTo(cp.coords);
 
@@ -391,9 +608,11 @@ body.appendChild(el);
 
 }
 
-updateHUD();
+/* INIT */
 
+updateHUD();
 renderSheet();
+startGPS();
 
 </script>
 
