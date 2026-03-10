@@ -444,7 +444,6 @@
     checkpoints.forEach(cp => {
       const m = L.marker(cp.coords, { icon: iconFor(cp) }).addTo(map);
       m.on("click", () => openCheckpoint(cp, m));
-      m.on("mousedown", () => openCheckpoint(cp, m));
       markerById.set(cp.id, m);
     });
 
